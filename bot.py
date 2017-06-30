@@ -15,6 +15,18 @@ from telebot import types
 from time import sleep
 from fuzzywuzzy import process
 
+# ======== Database Creation =========
+
+conn = sqlite3.connect('yama.db')
+db = conn.cursor()
+db.execute("CREATE TABLE IF NOT EXISTS Band (band_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE, name TEXT, audio TEXT UNIQUE)")
+db.execute("CREATE TABLE IF NOT EXISTS Genre (band_id INTEGER, genre_id INTEGER, PRIMARY KEY( band_id, genre_id))")
+db.execute("CREATE TABLE IF NOT EXISTS Like (user_id INTEGER, band_id INTEGER, PRIMARY KEY(user_id, band_id))")
+db.execute("CREATE TABLE IF NOT EXISTS Tag (genre_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, name TEXT )")
+db.execute("CREATE TABLE IF NOT EXISTS User (user_id INTEGER, name TEXT, sex INTEGER, temp TEXT, temp_genre INTEGER, PRIMARY KEY(user_id))")
+conn.commit()
+db.close()
+conn.close()
 
 # ======= Functional variables =======
 
