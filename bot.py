@@ -12,8 +12,22 @@ import sqlite3
 import traceback
 import numpy
 from telebot import types
-from time import sleep
+from time import sleep, ctime
 from fuzzywuzzy import process
+
+
+# ======= Functional variables =======
+
+bot = telebot.TeleBot(config.TOKEN)
+BOT_URL = "https://api.telegram.org/bot{}/".format(config.TOKEN)
+allowed_ids = config.allowed_ids
+logger = telebot.logger
+telebot.logger.setLevel(logging.DEBUG)
+
+logging.basicConfig(format = u'%(levelname)-8s [%(asctime)s] %(message)s', level = logging.DEBUG, filename = u'mylog.log')
+markup_delete = types.ReplyKeyboardRemove(selective=False)
+intr = lambda x1, x2: list(set(x1).intersection(x2))
+diff = lambda x1, x2: list(set(x1).difference(x2))
 
 # ======== Database Creation =========
 
@@ -24,23 +38,10 @@ db.execute("CREATE TABLE IF NOT EXISTS Genre (band_id INTEGER, genre_id INTEGER,
 db.execute("CREATE TABLE IF NOT EXISTS Like (user_id INTEGER, band_id INTEGER, PRIMARY KEY(user_id, band_id))")
 db.execute("CREATE TABLE IF NOT EXISTS Tag (genre_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, name TEXT )")
 db.execute("CREATE TABLE IF NOT EXISTS User (user_id INTEGER, name TEXT, sex INTEGER, temp TEXT, temp_genre INTEGER, PRIMARY KEY(user_id))")
+db.execute("CREATE TABLE IF NOT EXISTS Ticket (ticket_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE, user_id INTEGER, date INTEGER, text TEXT )")
 conn.commit()
 db.close()
 conn.close()
-
-# ======= Functional variables =======
-
-bot = telebot.TeleBot(config.TOKEN)
-BOT_URL = "https://api.telegram.org/bot{}/".format(config.TOKEN)
-allowed_ids = config.allowed_ids
-logger = telebot.logger
-telebot.logger.setLevel(logging.DEBUG)
-band_searched = None
-band_to_add = None
-markup_delete = types.ReplyKeyboardRemove(selective=False)
-intr = lambda x1, x2: list(set(x1).intersection(x2))
-diff = lambda x1, x2: list(set(x1).difference(x2))
-
 
 # ======= Bot start =======
 
@@ -72,6 +73,7 @@ def send_welcome(message):
 		bot.send_message(message.chat.id, "Я уже работаю, господин")
 	elif db_user[2] == 2:
 		bot.send_message(message.chat.id, "Я уже работаю, госпожа")
+
 
 
 
@@ -112,7 +114,7 @@ def determine_sex(message):
 			female = types.KeyboardButton('Женский')
 			markup.row(male, female)
 			msg = bot.send_message(message.chat.id, 
-				"Пожалуйста, сообщите мне ваш пол", 
+				"Пожалуйста, сообщите мне ваш пол, это очень важно для сбора статистики", 
 				reply_markup=markup)
 			bot.register_next_step_handler(msg, determine_sex)
 		except:
@@ -126,9 +128,11 @@ def determine_sex(message):
 def help_page(message):
 	markup = types.ReplyKeyboardRemove(selective=False)
 	bot.send_message(message.chat.id, 
-		"/help - список команд \n/bands - \
-		главное меню бота \n/control - \
-		управление базой данных",
+		" /help -  список команд \n/bands -\
+		главное меню бота \n/control -\
+		управление базой данных (требуются права модератора) \n/con -\
+		сделать вклад в наполнение базы данных \n/report -\
+		сообщить о проблеме или ошибке",
 		reply_markup=markup)
 
 
@@ -623,8 +627,49 @@ def callback_inline(call):
 					"Введите примерное название музыкального жанра для этой группы",
 					reply_markup=markup_delete)
 				bot.register_next_step_handler(msg, cont_genre_search)
+				db.close()
+				conn.close()
 			else:
-				bot.send_message(call.message.chat.id, "Извините, для группы уже задан жанр", reply_markup=markup_delete)
+				bot.send_message(call.message.chat.id, 
+					"Извините, для группы уже задан жанр", 
+					reply_markup=markup_delete)
+				db.close()
+				conn.close()
+
+
+# ====== Report system ======
+
+@bot.message_handler(commands=['report'])
+def report_start(message):
+	markup = types.ReplyKeyboardMarkup()
+	itembtna = types.KeyboardButton('Да')
+	itembtnb = types.KeyboardButton('Нет')
+	markup.row(itembtna, itembtnb)	
+	msg = bot.send_message(message.chat.id, 
+		"Обязательно сообщите мне, если вы обнаружили что-то неправильное\nЯ передам модераторам и они все исправят!\nВы хотите сообщить об ошибке?", 
+		reply_markup=markup)
+	bot.register_next_step_handler(msg, report_choose)
+
+def report_choose(message):
+	if message.text == "Да":
+		msg = bot.send_message(message.chat.id, 
+			"Напишите мне суть проблемы",
+			reply_markup=markup_delete)
+		bot.register_next_step_handler(msg, report_text)
+	elif message.text == "Нет":
+		bot.send_message(message.chat.id, 
+			"Как вам будет угодно", 
+			reply_markup=markup_delete)
+
+def report_text(message):
+	text = message.text
+	conn = sqlite3.connect('yama.db')
+	with conn:
+		conn.execute("INSERT INTO Ticket(user_id, date, text) VALUES (?,?,?)", 
+			(message.chat.id, ctime(), text))
+	bot.send_message(message.chat.id, 
+		"Спасибо, огромное, я передам",
+		reply_markup=markup_delete)
 
 
 
