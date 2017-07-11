@@ -18,7 +18,6 @@ bot = telebot.TeleBot(config.TOKEN)
 BOT_URL = "https://api.telegram.org/bot{}/".format(config.TOKEN)
 logger = telebot.logger
 telebot.logger.setLevel(logging.DEBUG)
-
 logging.basicConfig(format = u'%(levelname)-8s [%(asctime)s] %(message)s', level = logging.DEBUG, filename = u'mylog.log')
 markup_delete = types.ReplyKeyboardRemove(selective=False)
 intr = lambda x1, x2: list(set(x1).intersection(x2))
@@ -33,7 +32,7 @@ db.execute("CREATE TABLE IF NOT EXISTS Genre (band_id INTEGER, genre_id INTEGER,
 db.execute("CREATE TABLE IF NOT EXISTS Like (user_id INTEGER, band_id INTEGER, PRIMARY KEY(user_id, band_id))")
 db.execute("CREATE TABLE IF NOT EXISTS Tag (genre_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, name TEXT )")
 db.execute("CREATE TABLE IF NOT EXISTS User (user_id INTEGER, name TEXT, sex INTEGER, temp TEXT, temp_genre INTEGER, PRIMARY KEY(user_id))")
-db.execute("CREATE TABLE IF NOT EXISTS Ticket (ticket_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE, user_id INTEGER, date INTEGER, text TEXT )")
+db.execute("CREATE TABLE IF NOT EXISTS Ticket (ticket_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT UNIQUE, user_id INTEGER, date INTEGER, text TEXT, solved INTEGER )")
 conn.commit()
 db.close()
 conn.close()
@@ -162,9 +161,10 @@ def control_me(message):
 			markup = types.ReplyKeyboardMarkup()
 			itembtna = types.KeyboardButton('Список групп')
 			itembtnb = types.KeyboardButton('Добавить группу')
-			itembtnc = types.KeyboardButton('Отмена')
-			markup.row(itembtna, itembtnb)
-			markup.row(itembtnc)
+			itembtnc = types.KeyboardButton('Жалобы')
+			itembtnd = types.KeyboardButton('Отмена')
+			markup.row(itembtna, itembtnb, itembtnc)
+			markup.row(itembtnd)
 			msg = bot.send_message(message.chat.id, 
 				"Можно сделать следующее:", 
 				reply_markup=markup)
@@ -191,10 +191,45 @@ def process_control_choice(message):
 				"Напишите название группы латиницей", 
 				reply_markup=markup)
 			bot.register_next_step_handler(msg, process_create_band)
+		elif message.text == 'Жалобы':
+			markup = types.ReplyKeyboardRemove(selective=False)
+			msg = bot.send_message(message.chat.id, 
+				"Проверяю список жалоб", 
+				reply_markup=markup)
+
+			bot.send_message(message.chat.id, "Сейчас", reply_markup=markup_delete)
+
+			keyboard = types.InlineKeyboardMarkup()
+			conn = sqlite3.connect('yama.db')
+			db = conn.cursor()
+			db.execute('SELECT ticket_id, user_id, date, text, solved FROM Ticket WHERE solved IS NULL')
+			new_reports = db.fetchall()
+			bot.send_message(message.chat.id, str(new_reports))
+			for report in new_reports:
+				report_message = report[2]+" от юзера "+str(report[1])
+				callback_button = types.InlineKeyboardButton(text=report_message, callback_data="report."+str(report[0]))
+				keyboard.add(callback_button)
+			db.close()
+			conn.close()
+			bot.send_message(message.chat.id, "Я нашла следующие жалобы", reply_markup=keyboard)	
+
+
 		elif message.text == 'Отмена':
 			markup = types.ReplyKeyboardRemove(selective=False)
 			bot.send_message(message.chat.id, 
 				"Как вам будет угодно", reply_markup=markup)
+		else:
+			markup = types.ReplyKeyboardMarkup()
+			itembtna = types.KeyboardButton('Список групп')
+			itembtnb = types.KeyboardButton('Добавить группу')
+			itembtnc = types.KeyboardButton('Жалобы')
+			itembtnd = types.KeyboardButton('Отмена')
+			markup.row(itembtna, itembtnb, itembtnc)
+			markup.row(itembtnd)
+			msg = bot.send_message(message.chat.id, 
+				"Можно сделать следующее:", 
+				reply_markup=markup)
+			bot.register_next_step_handler(msg, process_control_choice)			
 
 	except Exception as e:
 		bot.reply_to(message, str(e))
@@ -293,6 +328,7 @@ def audio_added(message):
 			bot.send_message(message.chat.id, "Композиция добавлена!")
 	except Exception as e:
 		bot.reply_to(message, str(e))
+
 
 # ===== Creator panel ======
 
@@ -698,8 +734,6 @@ def cont_genre_search_result(message):
 		bot.reply_to(message, str(e))
 
 
-
-
 @bot.callback_query_handler(func=lambda call: True)
 def callback_inline(call):
 	try:
@@ -751,6 +785,19 @@ def callback_inline(call):
 						reply_markup=markup_delete)
 					db.close()
 					conn.close()
+			elif "report." in call.data:
+				bot.edit_message_text(
+					chat_id=call.message.chat.id,
+					message_id=call.message.message_id,
+					text=call.message.text,
+					parse_mode="Markdown")
+				report_id = str(call.data).replace("report.", "")
+				report_id = int(report_id)
+
+# finish report check 
+
+				# bot.send_message(call.message.chat.id, str(report_id))
+
 	except Exception as e:
 		bot.reply_to(message, str(e))
 
