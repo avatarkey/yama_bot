@@ -211,7 +211,8 @@ def process_control_choice(message):
 				keyboard.add(callback_button)
 			db.close()
 			conn.close()
-			bot.send_message(message.chat.id, "Я нашла следующие жалобы", reply_markup=keyboard)	
+			bot.send_message(message.chat.id, "Я нашла следующие жалобы", reply_markup=keyboard)
+			bot.send_message(message.chat.id, "Пожалуйста, нажмите на любую из них, чтобы открыть ее", reply_markup=markup_delete)
 
 
 		elif message.text == 'Отмена':
@@ -785,6 +786,7 @@ def callback_inline(call):
 						reply_markup=markup_delete)
 					db.close()
 					conn.close()
+
 			elif "report." in call.data:
 				bot.edit_message_text(
 					chat_id=call.message.chat.id,
@@ -793,13 +795,41 @@ def callback_inline(call):
 					parse_mode="Markdown")
 				report_id = str(call.data).replace("report.", "")
 				report_id = int(report_id)
-
-# finish report check 
-
-				# bot.send_message(call.message.chat.id, str(report_id))
+				conn = sqlite3.connect('yama.db')
+				db = conn.cursor()
+				db.execute('SELECT user_id, date, text FROM Ticket WHERE ticket_id=?', (report_id,))
+				ticket = db.fetchone()
+				db.close()
+				conn.close()
+				msg_text = "Пользователь с номером "+str(ticket[0])+" передал жалобу:\n"+ticket[2]
+				bot.send_message(call.message.chat.id, msg_text, reply_markup=markup_delete)
+				keyboard = types.InlineKeyboardMarkup()
+				keyboard.add(types.InlineKeyboardButton(text="Да", 
+					callback_data="solve."+str(report_id)+".yes"))
+				keyboard.add(types.InlineKeyboardButton(text="Нет", 
+					callback_data="solve."+str(report_id)+".no"))
+				bot.send_message(call.message.chat.id, "Задача решена?", reply_markup=keyboard)
+			elif "solve." in call.data:
+				bot.edit_message_text(
+					chat_id=call.message.chat.id,	
+					message_id=call.message.message_id,	
+					text=call.message.text,	
+					parse_mode="Markdown")
+				if ".yes" in call.data:
+					report_id = str(call.data).replace("solve.", "")					
+					report_id = report_id.replace(".yes", "")
+					conn = sqlite3.connect('yama.db')
+					db = conn.cursor()
+					db.execute('UPDATE Ticket SET solved=1 WHERE ticket_id=?', (report_id,))
+					conn.commit()
+					db.close()
+					conn.close()					
+					bot.send_message(call.message.chat.id, "Готово")
+				if ".no" in call.data:
+					bot.send_message(call.message.chat.id, "Сообщите мне, когда все поправите!")
 
 	except Exception as e:
-		bot.reply_to(message, str(e))
+		bot.reply_to(call.message, str(e))
 
 
 # ====== Report system ======
