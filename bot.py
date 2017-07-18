@@ -824,7 +824,7 @@ def callback_inline(call):
 					conn.commit()
 					db.close()
 					conn.close()					
-					bot.send_message(call.message.chat.id, "Готово")
+					bot.send_message(call.message.chat.id, "Я пометила жалобу как удовлетворенную")
 				if ".no" in call.data:
 					bot.send_message(call.message.chat.id, "Сообщите мне, когда все поправите!")
 
