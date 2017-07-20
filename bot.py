@@ -865,13 +865,19 @@ def report_choose(message):
 def report_text(message):
 	try:
 		text = message.text
-		conn = sqlite3.connect('yama.db')
-		with conn:
-			conn.execute("INSERT INTO Ticket(user_id, date, text) VALUES (?,?,?)", 
-				(message.chat.id, ctime(), text))
-		bot.send_message(message.chat.id, 
-			"Спасибо, огромное, я передам",
-			reply_markup=markup_delete)
+		if len(text) <= 2000:
+			conn = sqlite3.connect('yama.db')
+			with conn:
+				conn.execute("INSERT INTO Ticket(user_id, date, text) VALUES (?,?,?)", 
+					(message.chat.id, ctime(), text))
+			bot.send_message(message.chat.id, 
+				"Спасибо, огромное, я передам",
+				reply_markup=markup_delete)
+		else:
+			msg = bot.send_message(message.chat.id, 
+				"Простите, но сообщение превышает 1000 символов. Попробуйте еще раз команду /report",
+				reply_markup=markup_delete)
+			bot.register_next_step_handler(msg, report_start)
 	except Exception as e:
 		bot.reply_to(message, str(e))
 
